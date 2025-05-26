@@ -1,172 +1,95 @@
-import datetime
-import random
-
-import altair as alt
-import numpy as np
-import pandas as pd
 import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.express as px
+from datetime import datetime, timedelta
 
-# Show app title and description.
-st.set_page_config(page_title="Support tickets", page_icon="🎫")
-st.title("🎫 Support tickets")
-st.write(
-    """
-    This app shows how you can build an internal tool in Streamlit. Here, we are 
-    implementing a support ticket workflow. The user can create a ticket, edit 
-    existing tickets, and view some statistics.
-    """
+# 페이지 설정
+st.set_page_config(
+    page_title="📊 확장된 비즈니스 대시보드",
+    layout="wide",
 )
 
-# Create a random Pandas dataframe with existing tickets.
-if "df" not in st.session_state:
+st.markdown("<h1 style='color: #6c5ce7;'>💼 비즈니스 대시보드</h1>", unsafe_allow_html=True)
 
-    # Set seed for reproducibility.
-    np.random.seed(42)
+# ------------------- 데이터 생성 -------------------
+np.random.seed(42)
 
-    # Make up some fake issue descriptions.
-    issue_descriptions = [
-        "Network connectivity issues in the office",
-        "Software application crashing on startup",
-        "Printer not responding to print commands",
-        "Email server downtime",
-        "Data backup failure",
-        "Login authentication problems",
-        "Website performance degradation",
-        "Security vulnerability identified",
-        "Hardware malfunction in the server room",
-        "Employee unable to access shared files",
-        "Database connection failure",
-        "Mobile application not syncing data",
-        "VoIP phone system issues",
-        "VPN connection problems for remote employees",
-        "System updates causing compatibility issues",
-        "File server running out of storage space",
-        "Intrusion detection system alerts",
-        "Inventory management system errors",
-        "Customer data not loading in CRM",
-        "Collaboration tool not sending notifications",
-    ]
+dates = pd.date_range(datetime.today() - timedelta(days=29), periods=30)
+regions = ['서울', '부산', '대구', '광주', '대전']
+categories = ['전자제품', '의류', '식품', '가전', '도서']
 
-    # Generate the dataframe with 100 rows/tickets.
-    data = {
-        "ID": [f"TICKET-{i}" for i in range(1100, 1000, -1)],
-        "Issue": np.random.choice(issue_descriptions, size=100),
-        "Status": np.random.choice(["Open", "In Progress", "Closed"], size=100),
-        "Priority": np.random.choice(["High", "Medium", "Low"], size=100),
-        "Date Submitted": [
-            datetime.date(2023, 6, 1) + datetime.timedelta(days=random.randint(0, 182))
-            for _ in range(100)
-        ],
-    }
-    df = pd.DataFrame(data)
+data = pd.DataFrame({
+    '날짜': np.tile(dates, len(regions)),
+    '지역': np.repeat(regions, len(dates)),
+    '매출': np.random.randint(1000, 10000, size=len(dates)*len(regions)),
+    '방문자': np.random.randint(100, 1000, size=len(dates)*len(regions)),
+    '전환율': np.round(np.random.uniform(0.01, 0.2, size=len(dates)*len(regions)), 3)
+})
 
-    # Save the dataframe in session state (a dictionary-like object that persists across
-    # page runs). This ensures our data is persisted when the app updates.
-    st.session_state.df = df
+cat_data = pd.DataFrame({
+    '카테고리': np.random.choice(categories, 200),
+    '판매량': np.random.randint(10, 200, 200)
+})
 
-
-# Show a section to add a new ticket.
-st.header("Add a ticket")
-
-# We're adding tickets via an `st.form` and some input widgets. If widgets are used
-# in a form, the app will only rerun once the submit button is pressed.
-with st.form("add_ticket_form"):
-    issue = st.text_area("Describe the issue")
-    priority = st.selectbox("Priority", ["High", "Medium", "Low"])
-    submitted = st.form_submit_button("Submit")
-
-if submitted:
-    # Make a dataframe for the new ticket and append it to the dataframe in session
-    # state.
-    recent_ticket_number = int(max(st.session_state.df.ID).split("-")[1])
-    today = datetime.datetime.now().strftime("%m-%d-%Y")
-    df_new = pd.DataFrame(
-        [
-            {
-                "ID": f"TICKET-{recent_ticket_number+1}",
-                "Issue": issue,
-                "Status": "Open",
-                "Priority": priority,
-                "Date Submitted": today,
-            }
-        ]
-    )
-
-    # Show a little success message.
-    st.write("Ticket submitted! Here are the ticket details:")
-    st.dataframe(df_new, use_container_width=True, hide_index=True)
-    st.session_state.df = pd.concat([df_new, st.session_state.df], axis=0)
-
-# Show section to view and edit existing tickets in a table.
-st.header("Existing tickets")
-st.write(f"Number of tickets: `{len(st.session_state.df)}`")
-
-st.info(
-    "You can edit the tickets by double clicking on a cell. Note how the plots below "
-    "update automatically! You can also sort the table by clicking on the column headers.",
-    icon="✍️",
-)
-
-# Show the tickets dataframe with `st.data_editor`. This lets the user edit the table
-# cells. The edited data is returned as a new dataframe.
-edited_df = st.data_editor(
-    st.session_state.df,
-    use_container_width=True,
-    hide_index=True,
-    column_config={
-        "Status": st.column_config.SelectboxColumn(
-            "Status",
-            help="Ticket status",
-            options=["Open", "In Progress", "Closed"],
-            required=True,
-        ),
-        "Priority": st.column_config.SelectboxColumn(
-            "Priority",
-            help="Priority",
-            options=["High", "Medium", "Low"],
-            required=True,
-        ),
-    },
-    # Disable editing the ID and Date Submitted columns.
-    disabled=["ID", "Date Submitted"],
-)
-
-# Show some metrics and charts about the ticket.
-st.header("Statistics")
-
-# Show metrics side by side using `st.columns` and `st.metric`.
+# ------------------- 대시보드 상단 지표 -------------------
 col1, col2, col3 = st.columns(3)
-num_open_tickets = len(st.session_state.df[st.session_state.df.Status == "Open"])
-col1.metric(label="Number of open tickets", value=num_open_tickets, delta=10)
-col2.metric(label="First response time (hours)", value=5.2, delta=-1.5)
-col3.metric(label="Average resolution time (hours)", value=16, delta=2)
 
-# Show two Altair charts using `st.altair_chart`.
-st.write("")
-st.write("##### Ticket status per month")
-status_plot = (
-    alt.Chart(edited_df)
-    .mark_bar()
-    .encode(
-        x="month(Date Submitted):O",
-        y="count():Q",
-        xOffset="Status:N",
-        color="Status:N",
-    )
-    .configure_legend(
-        orient="bottom", titleFontSize=14, labelFontSize=14, titlePadding=5
-    )
-)
-st.altair_chart(status_plot, use_container_width=True, theme="streamlit")
+col1.metric("📈 총 매출", f"₩{data['매출'].sum():,}")
+col2.metric("👥 총 방문자", f"{data['방문자'].sum():,}명")
+col3.metric("🔁 평균 전환율", f"{data['전환율'].mean()*100:.2f}%")
 
-st.write("##### Current ticket priorities")
-priority_plot = (
-    alt.Chart(edited_df)
-    .mark_arc()
-    .encode(theta="count():Q", color="Priority:N")
-    .properties(height=300)
-    .configure_legend(
-        orient="bottom", titleFontSize=14, labelFontSize=14, titlePadding=5
-    )
-)
-st.altair_chart(priority_plot, use_container_width=True, theme="streamlit")
+st.markdown("---")
+
+# ------------------- 지역 선택 및 필터 -------------------
+st.sidebar.header("🔍 필터")
+selected_region = st.sidebar.selectbox("지역 선택", ["전체"] + regions)
+date_range = st.sidebar.slider("날짜 범위 선택", min_value=dates.min().date(), max_value=dates.max().date(),
+                               value=(dates.min().date(), dates.max().date()))
+
+# 필터 적용
+filtered_data = data.copy()
+if selected_region != "전체":
+    filtered_data = filtered_data[filtered_data['지역'] == selected_region]
+
+filtered_data = filtered_data[
+    (filtered_data['날짜'].dt.date >= date_range[0]) &
+    (filtered_data['날짜'].dt.date <= date_range[1])
+]
+
+# ------------------- 추이 차트 -------------------
+st.subheader("📊 날짜별 매출 & 방문자 추이")
+
+agg_data = filtered_data.groupby('날짜').agg({
+    '매출': 'sum',
+    '방문자': 'sum'
+}).reset_index()
+
+fig1 = px.line(agg_data, x="날짜", y=["매출", "방문자"], markers=True,
+               title="일자별 추이", template="plotly_white")
+fig1.update_traces(line=dict(width=2))
+
+st.plotly_chart(fig1, use_container_width=True)
+
+# ------------------- 지역별 매출 -------------------
+st.subheader("📍 지역별 총 매출")
+
+region_sales = data.groupby('지역')['매출'].sum().reset_index()
+fig2 = px.bar(region_sales, x="지역", y="매출", color="지역", text_auto=True,
+              template="plotly_dark", title="지역별 매출 분포")
+st.plotly_chart(fig2, use_container_width=True)
+
+# ------------------- 카테고리 판매량 -------------------
+st.subheader("🛍️ 카테고리별 판매량")
+
+cat_counts = cat_data.groupby("카테고리")["판매량"].sum().reset_index().sort_values("판매량", ascending=False)
+fig3 = px.pie(cat_counts, names="카테고리", values="판매량", title="판매 비율", hole=0.4,
+              color_discrete_sequence=px.colors.sequential.Rainbow_r)
+st.plotly_chart(fig3, use_container_width=True)
+
+# ------------------- 원본 데이터 확인 -------------------
+with st.expander("🔎 원본 데이터 보기"):
+    st.dataframe(filtered_data.head(100))
+
+# ------------------- 푸터 -------------------
+st.markdown("<hr><center>🚀 Streamlit으로 만든 비즈니스 대시보드 | ⓒ 2025</center>", unsafe_allow_html=True)
